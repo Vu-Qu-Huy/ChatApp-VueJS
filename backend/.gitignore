@@ -1,0 +1,3 @@
+# Ignore PocketBase application data
+/pb_data/
+/pb_migrations/

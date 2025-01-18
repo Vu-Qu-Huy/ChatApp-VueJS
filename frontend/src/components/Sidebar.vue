@@ -23,7 +23,7 @@
     <!-- Sidebar -->
     <TransitionRoot appear :show="true" as="template">
       <div
-        :class="[
+        :class="[ 
           'fixed inset-y-0 left-0 z-50 w-64 bg-white/95 backdrop-blur-md transform transition-all duration-300 ease-in-out shadow-xl',
           'border-r border-gray-200/80',
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
@@ -75,25 +75,22 @@
 
           <!-- Main Navigation -->
           <div class="space-y-1">
-            <a
-              v-for="(item, index) in navItems"
-              :key="index"
-              href="#"
+            <button
+              @click="currentView = 'Chat'"
               class="flex items-center space-x-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-100/80 transition-colors duration-200"
             >
-              <component :is="item.icon" class="size-5 text-gray-500" />
-              <span>{{ item.name }}</span>
-            </a>
+              <ChatBubbleLeftIcon class="size-5 text-gray-500" />
+              <span>Chat</span>
+            </button>
+            <button
+              @click="currentView = 'Gemini'"
+              class="flex items-center space-x-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-100/80 transition-colors duration-200"
+            >
+              <ChatBubbleLeftIcon class="size-5 text-gray-500" />
+              <span>Gemini</span>
+            </button>
           </div>
-          <div class="space-y-1">
-          <button
-            @click="toggleChat"
-            class="flex items-center space-x-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-100/80 transition-colors duration-200"
-          >
-            <ChatBubbleLeftIcon class="size-5 text-gray-500" />
-            <span>Chat</span>
-          </button>
-        </div>
+
           <!-- Logout -->
           <div
             class="mt-auto border-t border-gray-200/80 pt-4 space-y-2"
@@ -112,6 +109,11 @@
         </nav>
       </div>
     </TransitionRoot>
+
+    <!-- Main Content Area -->
+    <div class="ml-64 p-4">
+      <component :is="currentViewComponent" />
+    </div>
   </div>
 </template>
 
@@ -123,22 +125,23 @@ import {
   XMarkIcon,
   ArrowRightIcon,
   ChatBubbleLeftIcon,
-  UsersIcon,
-  Cog6ToothIcon,
 } from "@heroicons/vue/24/outline";
 import { useAuth } from "../authentication/auth"; // Assuming you have an auth composable
+import Chat from "./Chat.vue";
+import Gemini from "./Gemini.vue";
 
 const navItems = [
   { name: "Chats", icon: ChatBubbleLeftIcon },
-  { name: "Contacts", icon: UsersIcon },
-  { name: "Settings", icon: Cog6ToothIcon },
 ];
 
 const isSidebarOpen = ref(false);
+const currentView = ref("Chat");
+const currentViewComponent = computed(() => {
+  return currentView.value === "Chat" ? Chat : Gemini;
+});
 const { currentUser, doLogout } = useAuth();
 
 // Compute the full avatar URL
-const baseUrl = "http://127.0.0.1:8090/api/files";
 const fullAvatarUrl = computed(() => {
   if (
     currentUser?.value?.avatar &&
@@ -150,9 +153,4 @@ const fullAvatarUrl = computed(() => {
   }
   return null; // Return null if any field is missing
 });
-
-const toggleChat = () => {
-  // Emit event to the parent component to toggle chat visibility
-  this.$emit('toggle-chat');
-};
 </script>

@@ -5,7 +5,15 @@
       </div>
   
       <div class="flex-1 p-4 overflow-y-auto bg-gray-100" ref="messagesContainer">
-        <div v-for="message in messages" :key="message.id" class="mb-4 p-3 bg-white rounded-lg shadow">
+        <div 
+          v-for="(message, index) in messages" 
+          :key="index" 
+          :class="{
+            'mb-4 p-3 rounded-lg shadow': true,
+            'bg-white': message.type === 'user',
+            'bg-green-100': message.type === 'bot',
+          }"
+        >
           <p class="m-0 text-gray-800">{{ message.text }}</p>
         </div>
       </div>
@@ -17,79 +25,99 @@
           placeholder="Type a message..." 
           class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-green-600"
         />
-        <button type="submit" class="ml-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 active:translate-y-1">
+        <button 
+          type="submit" 
+          class="ml-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 active:translate-y-1"
+        >
           Send
         </button>
       </form>
     </div>
-  </template>
+</template>
   
-  <script setup>
+<script setup>
   import PocketBase from 'pocketbase';
   import { ref, onMounted, onUnmounted } from 'vue';
   
   const pb = new PocketBase('http://127.0.0.1:8090');
-  const currentUser = ref(pb.authStore.model);
-  const messages = ref([]);
-  const newMessage = ref('');
-  const messagesContainer = ref(null);
-  let unsubscribe = null;
+  const currentUser = ref(pb.authStore.model); // Current logged-in user
+  const messages = ref([]); // User-specific chat messages
+  const newMessage = ref(''); // New message input
+  const messagesContainer = ref(null); // Reference for scrolling
+  let unsubscribe = null; // Real-time subscription cleanup
   
-  const userChatId = ref(null); // To store the specific chat ID for the user
-  
-  // Load initial messages and subscribe to real-time updates
-  onMounted(async () => {
-    if (currentUser.value) {
-      await loadUserChat();
-    }
-  });
-  
-  const loadUserChat = async () => {
+  // Fetch and load user chat messages
+  const loadMessages = async () => {
     try {
-      // Fetch or create a chat for the current user
-      const chat = await pb.collection('user_chats').getFirstListItem(`user = "${currentUser.value.id}"`);
-  
-      userChatId.value = chat.id;
-      messages.value = chat.messages || [];
-  
-      // Subscribe to updates for this user's chat
-      unsubscribe = await pb.collection('user_chats').subscribe(chat.id, async ({ action, record }) => {
-        if (action === 'update') {
-          messages.value = record.messages || [];
-          scrollToBottom();
-        }
+      const res = await pb.collection('chat_messages').getFullList({
+        filter: `user = "${currentUser.value.id}"`,
+        sort: 'created_at',
       });
+      messages.value = res.map(msg => ({
+        id: msg.id,
+        text: msg.content,
+        type: msg.type, 
+      }));
+      scrollToBottom();
     } catch (error) {
-      console.error('Error loading user chat:', error);
+      console.error('Error loading messages:', error);
     }
   };
   
-  // Cleanup subscription on component unmount
-  onUnmounted(() => {
-    if (unsubscribe) {
-      unsubscribe();
-    }
-  });
-  
-  // Send new message
+  // Send a new message
   const sendMessage = async () => {
     if (!newMessage.value.trim() || !currentUser.value) return;
   
     try {
-      const data = {
+      // Add user message to "chat_messages" collection
+      const userMessage = {
         user: currentUser.value.id,
-        messages: [...messages.value, { text: newMessage.value.trim() }],
+        content: newMessage.value.trim(),
+        type: 'user',
       };
+      console.log(userMessage);
+      await pb.collection('chat_messages').create(userMessage);
+      console.log(JSON.stringify({ message: newMessage.value.trim() }));
+      console.log('Message sent');
+
+      // Call the backend for AI response
+      const encodedMessage = encodeURIComponent(newMessage.value.trim());
+      console.log(encodedMessage);
+      const response = await pb.send(`/api/${encodedMessage}`, {
+            method: 'POST',
+      });
+      console.log(response.message.raw);
+      const botMessage = {
+        user: currentUser.value.id,
+        content: response.message.raw,
+        type: 'bot',
+      };
+      await pb.collection('chat_messages').create(botMessage);
   
-      // Update the user's chat
-      await pb.collection('user_chats').update(userChatId.value, data);
-      newMessage.value = '';
+
+      scrollToBottom();
     } catch (error) {
       console.error('Error sending message:', error);
     }
   };
   
-  // Scroll to bottom of messages
+  // Subscribe to real-time updates
+  const subscribeToUpdates = async () => {
+    if (!currentUser.value) return;
+  
+    unsubscribe = await pb.collection('chat_messages').subscribe('*', ({ action, record }) => {
+      if (action === 'create' && record.user === currentUser.value.id) {
+        messages.value.push({
+          id: record.id,
+          text: record.content,
+          type: record.type,
+        });
+        scrollToBottom();
+      }
+    });
+  };
+  
+  // Scroll to the bottom of the messages container
   const scrollToBottom = () => {
     setTimeout(() => {
       if (messagesContainer.value) {
@@ -97,4 +125,24 @@
       }
     }, 100);
   };
+  
+  // Cleanup subscription on unmount
+  onUnmounted(() => {
+    if (unsubscribe) {
+      unsubscribe();
+    }
+  });
+  
+  // Load messages and subscribe on component mount
+  onMounted(async () => {
+    if (currentUser.value) {
+      await loadMessages();
+      await subscribeToUpdates();
+    }
+  });
   </script>
+  
+  <style scoped>
+  /* You can add custom styles here */
+  </style>
+  

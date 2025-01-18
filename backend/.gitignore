@@ -1,3 +1,4 @@
 # Ignore PocketBase application data
 /pb_data/
-
+.env
+/node_modules/

@@ -79,23 +79,26 @@
       await pb.collection('chat_messages').create(userMessage);
       console.log(JSON.stringify({ message: newMessage.value.trim() }));
       console.log('Message sent');
-
+      
       // Call the backend for AI response
       const encodedMessage = encodeURIComponent(newMessage.value.trim());
+      newMessage.value = '';
       console.log(encodedMessage);
       const response = await pb.send(`/api/${encodedMessage}`, {
             method: 'POST',
       });
-      console.log(response.message.raw);
+      console.log(response.message);
       const botMessage = {
         user: currentUser.value.id,
-        content: response.message.raw,
+        content: response.message,
         type: 'bot',
       };
+
       await pb.collection('chat_messages').create(botMessage);
   
 
       scrollToBottom();
+
     } catch (error) {
       console.error('Error sending message:', error);
     }

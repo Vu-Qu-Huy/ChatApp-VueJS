@@ -10,22 +10,34 @@ routerAdd('POST', '/api/{message}', async (e) => {
                 message: 'Message content is required',
             });
         }
-
-        // Send the prompt to the Gemini server using $http
-       
+        // Send the POST request
         const response = await $http.send({
-            url:     "http://localhost:4000/generate",
-            method:  "POST",
-            body:    JSON.stringify({ prompt: message }),
-            headers: {'Content-Type': 'application/json'}, 
+            url:    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=",
+            method: "POST",
+            body: JSON.stringify({
+                contents: [
+                    {
+                        parts: [{ text: message }]
+                    }
+                ]
+            }),
+            headers: { 'Content-Type': 'application/json' },
             timeout: 120, // in seconds
-        })
-        console.log('Gemini server response:', response);
+        });
+
+        console.log('Raw response:', response);
+
+        // Since `response` is already a plain object, no need to parse
+        if (!response || typeof response !== 'object') {
+            throw new Error('Unexpected response format');
+        }
+        const textResponse = response?.json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        console.log('Gemini server response:', textResponse);
 
         // Return the response to the client
         return e.json(200, {
             success: true,
-            message: response,
+            message: textResponse
         });
     } catch (error) {
         console.error('Chat endpoint error:', error);
